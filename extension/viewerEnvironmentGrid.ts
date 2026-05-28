@@ -1,5 +1,5 @@
 import { getLmvThree } from './lmvThree';
-import { getModelWorldBounds, getModelWorldUp } from './viewerEnvironmentBounds';
+import { getModelFloorWorldLevel, getModelWorldBounds, getModelWorldUp } from './viewerEnvironmentBounds';
 import { CAD_BIM_BACKGROUND, CAD_BIM_GRID, VIEWER_ENVIRONMENT_OVERLAY_SCENE } from './viewerEnvironmentSpec';
 
 export interface GridPlacement {
@@ -132,7 +132,8 @@ export const getGridPlacement = (viewer: Autodesk.Viewing.GuiViewer3D): GridPlac
 	const total = half * 2;
 
 	const buildFallback = (): GridPlacement => {
-		const floorW = box.isEmpty() ? 0 : Math.min(...getBoxCorners(box).map(c => c.dot(up)));
+		const aabbFloorW = box.isEmpty() ? 0 : Math.min(...getBoxCorners(box).map(c => c.dot(up)));
+		const floorW = getModelFloorWorldLevel(viewer, up, aabbFloorW);
 		const floorCenter = box.isEmpty()
 			? up.clone().multiplyScalar(CAD_BIM_GRID.floorLift)
 			: projectToFloor(box.getCenter(new THREE.Vector3()), up, floorW, CAD_BIM_GRID.floorLift);
@@ -164,14 +165,13 @@ export const getGridPlacement = (viewer: Autodesk.Viewing.GuiViewer3D): GridPlac
 	if (box.isEmpty()) return buildFallback();
 
 	const corners = getBoxCorners(box);
-	let wMin = Number.POSITIVE_INFINITY;
+	let aabbFloorW = Number.POSITIVE_INFINITY;
 	for (const c of corners) {
-		wMin = Math.min(wMin, c.dot(up));
+		aabbFloorW = Math.min(aabbFloorW, c.dot(up));
 	}
+	const floorW = getModelFloorWorldLevel(viewer, up, aabbFloorW);
 
-	const floorEps = 1e-3;
-	const floorCorners = corners.filter(c => c.dot(up) <= wMin + floorEps);
-	const floorPoints = floorCorners.length > 0 ? floorCorners : corners;
+	const floorPoints = corners.map(c => projectToFloor(c, up, floorW, 0));
 
 	let uMin = Number.POSITIVE_INFINITY;
 	let vMin = Number.POSITIVE_INFINITY;
@@ -209,7 +209,7 @@ export const getGridPlacement = (viewer: Autodesk.Viewing.GuiViewer3D): GridPlac
 			.add(axisU.clone().multiplyScalar(uCenter - refU))
 			.add(axisV.clone().multiplyScalar(vCenter - refV)),
 		up,
-		wMin,
+		floorW,
 		CAD_BIM_GRID.floorLift
 	);
 

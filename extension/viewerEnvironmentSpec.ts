@@ -20,8 +20,8 @@ export const CAD_BIM_GRID = {
 	lineOpacity: 0.52,
 	edgeOpacity: 0.36,
 	majorStep: 5,
-	/** Slight lift above exact floor to reduce z-fighting with the model base. */
-	floorLift: 0.02,
+	/** Tiny lift to reduce z-fighting; grid sits flush with the model base. */
+	floorLift: 0.001,
 	/** Hide grid when the camera drops below this offset from the floor plane. */
 	belowCameraEpsilon: 0.15,
 	/** Back-face ground cap — blocks seeing through the floor from underneath. */
