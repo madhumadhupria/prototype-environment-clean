@@ -3,7 +3,11 @@ import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
-	const base = env.VITE_BASE_PATH ?? '/prototype-environment/';
+	// Root path locally; subpath on GitHub Pages (see deploy-pages.yml).
+	const base =
+		mode === 'development'
+			? '/'
+			: (env.VITE_BASE_PATH ?? '/prototype-environment/');
 
 	return {
 		base,
@@ -14,14 +18,15 @@ export default defineConfig(({ mode }) => {
 		},
 		server: {
 			port: 5173,
-			proxy: env.VITE_TOKEN_URL?.startsWith('/')
-				? {
-						'/api': {
-							target: 'http://127.0.0.1:3001',
-							changeOrigin: true,
-						},
-					}
-				: undefined,
+			proxy:
+				mode === 'development' || env.VITE_TOKEN_URL?.startsWith('/')
+					? {
+							'/api': {
+								target: 'http://127.0.0.1:3001',
+								changeOrigin: true,
+							},
+						}
+					: undefined,
 		},
 	};
 });

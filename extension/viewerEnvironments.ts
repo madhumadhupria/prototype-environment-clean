@@ -8,7 +8,7 @@ export interface ViewerEnvironmentOption {
 }
 
 export const VIEWER_ENVIRONMENTS: ViewerEnvironmentOption[] = [
-	{ id: 'cad-bim-neutral', label: 'Neutral' },
+	{ id: 'cad-bim-neutral', label: 'CAD/BIM' },
 	{ id: 'acc-default', label: 'Default' },
 ];
 

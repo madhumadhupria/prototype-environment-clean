@@ -1,5 +1,6 @@
-import { applyCadBimVisuals } from '../extension/applyViewerEnvironment';
-import { applyCadBimHomeView } from '../extension/viewerEnvironmentCamera';
+import '../extension/ViewerEnvironmentExtension';
+import { VIEWER_ENVIRONMENT_EXTENSION_ID } from '../extension/ViewerEnvironmentExtension';
+import { applyCadBimBackdrop } from '../extension/applyViewerEnvironment';
 import { loadConfig } from './config';
 
 const statusEl = document.getElementById('status');
@@ -23,18 +24,14 @@ const fetchAccessToken = async (
 	onTokenReady(payload.access_token, payload.expires_in ?? 3600);
 };
 
-const hideToolbar = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
-	viewer.addEventListener(Autodesk.Viewing.TOOLBAR_CREATED_EVENT, () => {
-		const toolbar = viewer.getToolbar(false);
-		const container = toolbar?.container as HTMLElement | undefined;
-		if (container) container.style.display = 'none';
-	});
-};
-
-const applyEnvironment = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
-	applyCadBimVisuals(viewer);
-	applyCadBimHomeView(viewer, { once: true, skipTransition: true });
-	setStatus('');
+/** Prefer an explicit 3D geometry view — avoids site/2D defaults that can look like a flat map. */
+const getPrimary3dViewable = (doc: Autodesk.Viewing.Document): Autodesk.Viewing.BubbleNode | null => {
+	const root = doc.getRoot();
+	const threeD = root.search({ type: 'geometry', role: '3d' }) as Autodesk.Viewing.BubbleNode[];
+	if (threeD.length > 0) {
+		return threeD[0];
+	}
+	return root.getDefaultGeometry(true);
 };
 
 const init = async (): Promise<void> => {
@@ -76,27 +73,36 @@ const init = async (): Promise<void> => {
 			}
 
 			const viewer = new Autodesk.Viewing.GuiViewer3D(container, {
-				disabledExtensions: { measure: true, section: true },
+				disabledExtensions: {
+					measure: true,
+					section: true,
+					'Autodesk.Geolocation': true,
+				},
 			});
-			hideToolbar(viewer);
 			viewer.start();
+			applyCadBimBackdrop(viewer);
 			(window as unknown as { viewer?: Autodesk.Viewing.GuiViewer3D }).viewer = viewer;
+
+			void viewer.loadExtension(VIEWER_ENVIRONMENT_EXTENSION_ID).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error);
+				setStatus(`Extension failed: ${message}`);
+			});
 
 			setStatus('Loading model…');
 
 			Autodesk.Viewing.Document.load(
 				`urn:${config.modelUrn}`,
 				(doc) => {
-					const defaultViewable = doc.getRoot().getDefaultGeometry(true);
-					if (!defaultViewable) {
-						setStatus('No default 3D view in document.');
+					const viewable = getPrimary3dViewable(doc);
+					if (!viewable) {
+						setStatus('No 3D view in document.');
 						return;
 					}
 
 					viewer
-						.loadDocumentNode(doc, defaultViewable)
+						.loadDocumentNode(doc, viewable)
 						.then(() => {
-							const onReady = (): void => applyEnvironment(viewer);
+							const onReady = (): void => setStatus('');
 							if (viewer.model?.isLoadDone?.()) {
 								onReady();
 							} else {
