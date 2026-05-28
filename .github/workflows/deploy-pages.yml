@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci
+      - run: npm ci --include=dev
       - run: node scripts/write-config.mjs
         env:
           MODEL_URN: ${{ vars.MODEL_URN }}
