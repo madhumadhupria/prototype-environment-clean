@@ -19,23 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-      - name: Install dependencies
-        run: |
-          set -e
-          for attempt in 1 2 3 4 5; do
-            echo "Install attempt $attempt"
-            if npm install --no-fund --no-audit; then
-              test -f node_modules/vite/package.json
-              exit 0
-            fi
-            sleep 15
-          done
-          exit 1
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
         env:
           MODEL_URN: ${{ vars.MODEL_URN }}
           TOKEN_URL: ${{ vars.TOKEN_URL }}
