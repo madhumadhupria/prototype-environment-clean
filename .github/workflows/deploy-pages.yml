@@ -23,14 +23,12 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci --include=dev
-      - run: node scripts/write-config.mjs
+      - run: npm install
+      - run: npm run build
         env:
           MODEL_URN: ${{ vars.MODEL_URN }}
           TOKEN_URL: ${{ vars.TOKEN_URL }}
           APS_ENV: ${{ vars.APS_ENV }}
-      - run: npm run build
-        env:
           VITE_BASE_PATH: /prototype-environment/
       - uses: actions/upload-pages-artifact@v3
         with:

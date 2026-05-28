@@ -7,7 +7,7 @@
     "config": "node scripts/write-config.mjs",
     "dev": "npm run config && vite",
     "dev:token": "node scripts/local-token-server.mjs",
-    "build": "node scripts/write-config.mjs && vite build",
+    "build": "node scripts/write-config.mjs && npx vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
