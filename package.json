@@ -1,0 +1,19 @@
+{
+  "name": "prototype-environment",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "config": "node scripts/write-config.mjs",
+    "dev": "npm run config && vite",
+    "dev:token": "node scripts/local-token-server.mjs",
+    "build": "node scripts/write-config.mjs && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/forge-viewer": "^7.99.0",
+    "@types/three": "^0.169.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}
