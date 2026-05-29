@@ -199,7 +199,7 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 
 		this.sectionBoxButton = new Autodesk.Viewing.UI.Button(SECTION_BOX_BUTTON_ID);
 		this.sectionBoxButton.setToolTip('Section box');
-		setSectionBoxToolbarIcon(this.sectionBoxButton.icon);
+		setSectionBoxToolbarIcon(this.sectionBoxButton);
 		this.sectionBoxButton.onClick = (): void => {
 			void this.onSectionBoxToggle();
 		};
