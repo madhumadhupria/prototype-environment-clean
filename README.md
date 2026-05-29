@@ -2,7 +2,7 @@
 
 Public **single-model** prototype: APS Viewer (LMV) with **CAD/BIM neutral** backdrop and **footprint grid**. Full-screen canvas only — no ACC shell.
 
-**Live demo (after setup):** https://madhumadhupria.github.io/prototype-environment/
+**Live demo:** https://madhumadhupria.github.io/prototype-environment/
 
 Extension logic is copied from [viewer-environment](https://github.com/madhumadhupria/viewer-environment) (`main`).
 
@@ -14,7 +14,7 @@ Extension logic is copied from [viewer-environment](https://github.com/madhumadh
 |------|-----------------|
 | **APS Client ID + Secret** | [APS developer portal](https://aps.autodesk.com/) → Create app |
 | **Model URN** (one model) | Upload + translate in APS, or use an existing viewable URN |
-| **Vercel project** (free) | Hosts `/api/token` only — secrets stay off GitHub Pages |
+| **Token URL** (public deploy) | HTTPS endpoint that returns APS 2-legged tokens (see below) |
 
 ---
 
@@ -25,8 +25,8 @@ git clone https://github.com/madhumadhupria/prototype-environment.git
 cd prototype-environment
 cp .env.example .env
 # Edit .env: APS_CLIENT_ID, APS_CLIENT_SECRET, MODEL_URN
-npm install
-npm run config
+pnpm install
+pnpm run config
 ```
 
 Terminal 1 — token server:
@@ -38,33 +38,30 @@ node scripts/local-token-server.mjs
 Terminal 2 — viewer:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Open http://localhost:5173
+
+Local `TOKEN_URL` defaults to `/api/token` (served by the local token script).
 
 ---
 
 ## Publish to GitHub Pages
 
-### 1. Vercel (token API)
-
-1. Import this repo in [Vercel](https://vercel.com).
-2. Set environment variables: `APS_CLIENT_ID`, `APS_CLIENT_SECRET`.
-3. Deploy. Note the URL, e.g. `https://prototype-environment.vercel.app`.
-4. Token endpoint: `https://prototype-environment.vercel.app/api/token`
-
-### 2. GitHub repo variables
+### GitHub repo variables
 
 In **Settings → Secrets and variables → Actions → Variables**:
 
 | Variable | Example |
 |----------|---------|
 | `MODEL_URN` | Base64 URN **without** `urn:` prefix |
-| `TOKEN_URL` | `https://prototype-environment.vercel.app/api/token` |
+| `TOKEN_URL` | `https://your-host.example.com/api/token` |
 | `APS_ENV` | `AutodeskProduction` or `AutodeskStaging2` |
 
-### 3. Enable Pages
+`TOKEN_URL` must be a public HTTPS API that issues APS tokens using your client id/secret (hosted separately from Pages — secrets must not ship in the static site).
+
+### Enable Pages
 
 **Settings → Pages → Build and deployment → Source:** GitHub Actions.
 
@@ -87,10 +84,9 @@ The app loads `urn:${modelUrn}` from `public/config.json`.
 ## Layout
 
 ```
-extension/          # CAD/BIM neutral + grid (from viewer-environment)
+extension/          # CAD/BIM neutral + grid + section box
 src/main.ts         # Full-screen LMV, auto-applies environment
-api/token.js        # Vercel serverless APS token
-scripts/            # Local dev token server
+scripts/            # config writer + local dev token server
 ```
 
 ---
