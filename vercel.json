@@ -2,6 +2,6 @@
   "framework": null,
   "installCommand": "exit 0",
   "buildCommand": "exit 0",
-  "outputDirectory": "public",
+  "outputDirectory": "dist",
   "rewrites": [{ "source": "/api/token", "destination": "/api/token.js" }]
 }
