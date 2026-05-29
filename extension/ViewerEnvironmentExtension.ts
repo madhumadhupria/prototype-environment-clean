@@ -5,7 +5,9 @@ import {
 	BuildingColorSchemeId,
 	DEFAULT_BUILDING_COLOR_SCHEME_ID,
 } from './viewerBuildingPalettes';
-import { setColorSchemeToolbarIcon, setEnvironmentToolbarIcon } from './toolbarIcons';
+import { wireNativeSectionToolbar } from './lmvNativeSection';
+import { deactivateSectionBox, isSectionBoxActive, toggleSectionBox } from './viewerEnvironmentSection';
+import { setColorSchemeToolbarIcon, setEnvironmentToolbarIcon, setSectionBoxToolbarIcon } from './toolbarIcons';
 import { ensureStylesInjected } from './styles';
 import { isViewerModelReady } from './viewerEnvironmentLifecycle';
 import { applyCadBimHomeView, captureCadBimHomeViewArray } from './viewerEnvironmentCamera';
@@ -15,6 +17,7 @@ import { DEFAULT_VIEWER_ENVIRONMENT_ID, VIEWER_ENVIRONMENTS, ViewerEnvironmentId
 export const VIEWER_ENVIRONMENT_EXTENSION_ID = 'Autodesk.Priyam.ViewerEnvironment';
 
 const TOOLBAR_BUTTON_ID = 'viewer-environment-button';
+const SECTION_BOX_BUTTON_ID = 'viewer-environment-section-box-button';
 const COLOR_SCHEME_BUTTON_ID = 'viewer-environment-color-scheme-button';
 const FLYOUT_CLASS = 'priyam-viewer-env-flyout';
 const VISUALS_DEBOUNCE_MS = 400;
@@ -24,7 +27,9 @@ type ActiveColorSchemeId = Exclude<BuildingColorSchemeId, 'none'>;
 
 class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 	private button: Autodesk.Viewing.UI.Button | undefined;
+	private sectionBoxButton: Autodesk.Viewing.UI.Button | undefined;
 	private colorSchemeButton: Autodesk.Viewing.UI.Button | undefined;
+	private sectionBoxActive = false;
 	private toolbarControlsParent: Autodesk.Viewing.UI.ControlGroup | undefined;
 	private flyout: HTMLDivElement | undefined;
 	private colorSchemeFlyout: HTMLDivElement | undefined;
@@ -37,6 +42,8 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 	private documentClickHandler: ((event: MouseEvent) => void) | undefined;
 	private colorSchemeDocumentClickHandler: ((event: MouseEvent) => void) | undefined;
 	private geometryLoadedHandler: (() => void) | undefined;
+	private extensionLoadedHandler: ((event: { extensionId?: string }) => void) | undefined;
+	private unwireNativeSectionToolbar: (() => void) | undefined;
 	private handleToolbarCreated = (): void => {
 		this.viewer.removeEventListener(Autodesk.Viewing.TOOLBAR_CREATED_EVENT, this.handleToolbarCreated);
 		this.buildUi();
@@ -44,6 +51,7 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 
 	public load(): boolean {
 		ensureStylesInjected();
+		this.sectionBoxActive = false;
 		if (this.isCadBimEnvironmentActive()) {
 			try {
 				applyCadBimBackdrop(this.viewer);
@@ -71,6 +79,27 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 			}
 		).viewerEnvironmentCaptureHome = () => captureCadBimHomeViewArray(this.viewer);
 
+		this.unwireNativeSectionToolbar = wireNativeSectionToolbar(
+			this.viewer,
+			() => {
+				void this.onSectionBoxToggle();
+			},
+			() => isSectionBoxActive(this.viewer)
+		);
+		this.extensionLoadedHandler = (event: { extensionId?: string }): void => {
+			if (event.extensionId === 'Autodesk.SmartSection' || event.extensionId === 'Autodesk.SmartSectionUI') {
+				this.unwireNativeSectionToolbar?.();
+				this.unwireNativeSectionToolbar = wireNativeSectionToolbar(
+					this.viewer,
+					() => {
+						void this.onSectionBoxToggle();
+					},
+					() => isSectionBoxActive(this.viewer)
+				);
+			}
+		};
+		this.viewer.addEventListener(Autodesk.Viewing.EXTENSION_LOADED_EVENT, this.extensionLoadedHandler);
+
 		return true;
 	}
 
@@ -84,6 +113,14 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 			this.viewer.removeEventListener(Autodesk.Viewing.GEOMETRY_LOADED_EVENT, this.geometryLoadedHandler);
 			this.geometryLoadedHandler = undefined;
 		}
+		if (this.extensionLoadedHandler) {
+			this.viewer.removeEventListener(Autodesk.Viewing.EXTENSION_LOADED_EVENT, this.extensionLoadedHandler);
+			this.extensionLoadedHandler = undefined;
+		}
+		this.unwireNativeSectionToolbar?.();
+		this.unwireNativeSectionToolbar = undefined;
+		void deactivateSectionBox(this.viewer);
+		this.sectionBoxActive = false;
 		this.removeUi();
 		this.closeFlyout();
 		this.closeColorSchemeFlyout();
@@ -160,6 +197,13 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 		setColorSchemeToolbarIcon(this.colorSchemeButton.icon);
 		this.colorSchemeButton.onClick = (): void => this.toggleColorSchemeFlyout();
 
+		this.sectionBoxButton = new Autodesk.Viewing.UI.Button(SECTION_BOX_BUTTON_ID);
+		this.sectionBoxButton.setToolTip('Section box');
+		setSectionBoxToolbarIcon(this.sectionBoxButton.icon);
+		this.sectionBoxButton.onClick = (): void => {
+			void this.onSectionBoxToggle();
+		};
+
 		const settingsTools = toolbar.getControl(
 			Autodesk.Viewing.TOOLBAR.SETTINGSTOOLSID
 		) as Autodesk.Viewing.UI.ControlGroup | null;
@@ -168,6 +212,41 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 
 		parent.addControl(this.button);
 		parent.addControl(this.colorSchemeButton);
+		parent.addControl(this.sectionBoxButton);
+	}
+
+	private async onSectionBoxToggle(): Promise<void> {
+		try {
+			const enabled = await toggleSectionBox(this.viewer);
+			this.sectionBoxActive = enabled;
+			this.updateSectionBoxButtonState();
+			this.syncNativeSectionToolbarState();
+		} catch (error) {
+			console.error('ViewerEnvironment: section box toggle failed', error);
+		}
+	}
+
+	private syncNativeSectionToolbarState(): void {
+		const ui = this.viewer.getExtension('Autodesk.SmartSectionUI') as {
+			sectionToolButton?: Autodesk.Viewing.UI.Button;
+		} | null;
+		const nativeButton = ui?.sectionToolButton;
+		if (!nativeButton) return;
+		const active = isSectionBoxActive(this.viewer);
+		nativeButton.setState(
+			active
+				? Autodesk.Viewing.UI.Button.State.ACTIVE
+				: Autodesk.Viewing.UI.Button.State.INACTIVE
+		);
+	}
+
+	private updateSectionBoxButtonState(): void {
+		if (!this.sectionBoxButton) return;
+		if (this.sectionBoxActive) {
+			this.sectionBoxButton.setState(Autodesk.Viewing.UI.Button.State.ACTIVE);
+		} else {
+			this.sectionBoxButton.setState(Autodesk.Viewing.UI.Button.State.INACTIVE);
+		}
 	}
 
 	private removeUi(): void {
@@ -175,9 +254,11 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 		if (parent) {
 			parent.removeControl(TOOLBAR_BUTTON_ID);
 			parent.removeControl(COLOR_SCHEME_BUTTON_ID);
+			parent.removeControl(SECTION_BOX_BUTTON_ID);
 		}
 		this.toolbarControlsParent = undefined;
 		this.button = undefined;
+		this.sectionBoxButton = undefined;
 		this.colorSchemeButton = undefined;
 	}
 

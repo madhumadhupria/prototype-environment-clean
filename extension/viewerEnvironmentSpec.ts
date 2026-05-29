@@ -36,6 +36,23 @@ export const CAD_BIM_GRID = {
 	fadeCutoffOpacity: 0.04,
 } as const;
 
+/** Translucent green section box — light faces, darker green on hover. */
+export const SECTION_BOX_STYLE = {
+	faceColor: 0x4ade80,
+	faceOpacity: 0.1,
+	faceHoverColor: 0x22c55e,
+	faceHoverOpacity: 0.42,
+	edgeColor: 0x166534,
+	edgeOpacity: 0.85,
+	facePickScale: 1.04,
+} as const;
+
+/** Padding around model bounds — section box cannot expand beyond this envelope. */
+export const SECTION_BOX_ENVELOPE = {
+	paddingRatio: 0.035,
+	paddingMin: 0.75,
+} as const;
+
 export const CAD_BIM_LIGHTING = {
 	ambient: { color: 0xffffff, intensity: 0.72 },
 	directional: {
@@ -80,3 +97,5 @@ export const ACC_DEFAULT = {
 } as const;
 
 export const VIEWER_ENVIRONMENT_OVERLAY_SCENE = 'priyam-viewer-environment-grid';
+export const SECTION_BOX_OVERLAY_SCENE = 'priyam-viewer-environment-section-box';
+export const SECTION_BOX_CUT_PLANE_SET = 'priyam-viewer-environment-section-cut';
