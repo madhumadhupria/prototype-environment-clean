@@ -1,4 +1,5 @@
 import { suppressNativeSectionGizmos } from './lmvNativeSection';
+import type { SectionPrototypeId } from './prototypeStripSpec';
 import {
 	activatePriyamSectionBox,
 	deactivatePriyamSectionBox,
@@ -6,13 +7,18 @@ import {
 	togglePriyamSectionBox,
 } from './priyamSectionBox';
 
+export type SectionBoxMode = SectionPrototypeId;
+
 export const deactivateSectionBox = async (viewer: Autodesk.Viewing.GuiViewer3D): Promise<void> => {
 	deactivatePriyamSectionBox(viewer);
 };
 
-export const activateSectionBox = async (viewer: Autodesk.Viewing.GuiViewer3D): Promise<boolean> => {
+export const activateSectionBox = async (
+	viewer: Autodesk.Viewing.GuiViewer3D,
+	mode: SectionBoxMode = 'green-box'
+): Promise<boolean> => {
 	suppressNativeSectionGizmos(viewer);
-	const enabled = activatePriyamSectionBox(viewer);
+	const enabled = activatePriyamSectionBox(viewer, mode);
 	if (enabled) {
 		suppressNativeSectionGizmos(viewer);
 		window.requestAnimationFrame(() => suppressNativeSectionGizmos(viewer));
@@ -20,9 +26,13 @@ export const activateSectionBox = async (viewer: Autodesk.Viewing.GuiViewer3D): 
 	return enabled;
 };
 
-export const toggleSectionBox = async (viewer: Autodesk.Viewing.GuiViewer3D, enable?: boolean): Promise<boolean> => {
+export const toggleSectionBox = async (
+	viewer: Autodesk.Viewing.GuiViewer3D,
+	enable?: boolean,
+	mode: SectionBoxMode = 'green-box'
+): Promise<boolean> => {
 	suppressNativeSectionGizmos(viewer);
-	const enabled = togglePriyamSectionBox(viewer, enable);
+	const enabled = togglePriyamSectionBox(viewer, enable, mode);
 	if (enabled) {
 		suppressNativeSectionGizmos(viewer);
 		window.requestAnimationFrame(() => suppressNativeSectionGizmos(viewer));

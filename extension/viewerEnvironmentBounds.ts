@@ -79,6 +79,16 @@ const isThinSiteSlab = (
 };
 
 /**
+ * Floor level for grid alignment — same as the building base used for model placement.
+ * @deprecated Use getModelFloorWorldLevel — grid now shares the building-base plane.
+ */
+export const getGridFloorWorldLevel = (
+	viewer: Autodesk.Viewing.GuiViewer3D,
+	up: THREE.Vector3,
+	aabbFloorW: number
+): number => getModelFloorWorldLevel(viewer, up, aabbFloorW);
+
+/**
  * World-space floor level (dot with model up) at the building base.
  * Ignores thin site/grade slabs below the main structure.
  */

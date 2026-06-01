@@ -53,14 +53,23 @@ const server = http.createServer(async (req, res) => {
 		scope: 'data:read viewables:read',
 	});
 
-	const tokenResponse = await fetch('https://developer.api.autodesk.com/authentication/v2/token', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-		body,
-	});
+	let tokenResponse;
+	try {
+		tokenResponse = await fetch('https://developer.api.autodesk.com/authentication/v2/token', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body,
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		res.writeHead(503, { 'Content-Type': 'application/json' });
+		res.end(JSON.stringify({ error: `APS token request failed: ${message}` }));
+		return;
+	}
+
 	const data = await tokenResponse.json();
 	res.writeHead(tokenResponse.status, { 'Content-Type': 'application/json' });
-	res.end(JSON.stringify(data));
+	res.end(JSON.stringify(tokenResponse.ok ? data : { error: data }));
 });
 
 server.listen(port, () => {

@@ -8,13 +8,71 @@ import {
 	type SectionVisibilityState,
 } from './sectionBoxVisibility';
 import { getModelWorldBounds } from './viewerEnvironmentBounds';
-import { SECTION_BOX_CUT_PLANE_SET, SECTION_BOX_OVERLAY_SCENE, SECTION_BOX_STYLE } from './viewerEnvironmentSpec';
+import { SECTION_BOX_CUT_PLANE_SET, SECTION_BOX_OVERLAY_SCENE, SECTION_BOX_STYLE, OUTLINE_SECTION_BOX_STYLE } from './viewerEnvironmentSpec';
+import type { SectionPrototypeId } from './prototypeStripSpec';
 
 const TOOL_NAME = 'PriyamSectionBoxTool';
 /** Above GGMarkupsTool (200) and pen compat (210) while the section box is active. */
 const SECTION_TOOL_PRIORITY = 255;
 const MIN_BOX_SIZE = 0.5;
 const FACE_PICK_EPS = 0.001;
+
+export type SectionBoxMode = SectionPrototypeId;
+
+interface SectionBoxVisualConfig {
+	faceColor: number;
+	faceOpacity: number;
+	faceHoverColor: number;
+	faceHoverOpacity: number;
+	edgeColor: number;
+	edgeOpacity: number;
+	facePickScale: number;
+	showHandles: boolean;
+	enableFaceDrag: boolean;
+	handleColor: number;
+	handleOpacity: number;
+	handleSizeRatio: number;
+	handleMinSize: number;
+}
+
+const CORNER_SIGNS: ReadonlyArray<readonly [1 | -1, 1 | -1, 1 | -1]> = [
+	[-1, -1, -1],
+	[1, -1, -1],
+	[1, -1, 1],
+	[-1, -1, 1],
+	[-1, 1, -1],
+	[1, 1, -1],
+	[1, 1, 1],
+	[-1, 1, 1],
+];
+
+const getVisualConfig = (mode: SectionBoxMode): SectionBoxVisualConfig => {
+	if (mode === 'outlines') {
+		return {
+			...OUTLINE_SECTION_BOX_STYLE,
+			showHandles: true,
+			enableFaceDrag: false,
+		};
+	}
+	return {
+		...SECTION_BOX_STYLE,
+		handleColor: 0x3a3a3a,
+		handleOpacity: 1,
+		handleSizeRatio: 0.014,
+		handleMinSize: 0.1,
+		showHandles: false,
+		enableFaceDrag: true,
+	};
+};
+
+const axesForCorner = (cornerIndex: number): AxisSign[] => {
+	const signs = CORNER_SIGNS[cornerIndex];
+	return [
+		{ axis: 'x', sign: signs[0] },
+		{ axis: 'y', sign: signs[1] },
+		{ axis: 'z', sign: signs[2] },
+	];
+};
 
 type Axis = 'x' | 'y' | 'z';
 
@@ -48,7 +106,14 @@ interface AxisSign {
 	sign: 1 | -1;
 }
 
+interface BoxHandle {
+	mesh: THREE.Mesh;
+	pickMesh: THREE.Mesh;
+	axes: AxisSign[];
+}
+
 interface DragState {
+	mode: 'face' | 'handle';
 	axes: AxisSign[];
 	hitPlanes: THREE.Plane[];
 	faceNormal: THREE.Vector3;
@@ -132,9 +197,13 @@ class PriyamSectionBoxController {
 	private readonly min = new THREE.Vector3();
 	private readonly max = new THREE.Vector3();
 	private readonly faces: BoxFace[] = [];
+	private readonly handles: BoxHandle[] = [];
 	private edges: THREE.LineSegments | null = null;
 	private hoveredFace: BoxFace | null = null;
+	private hoveredHandle: BoxHandle | null = null;
 	private drag: DragState | null = null;
+	private mode: SectionBoxMode = 'green-box';
+	private visualConfig: SectionBoxVisualConfig = getVisualConfig('green-box');
 	private toolRegistered = false;
 	private sectionTool: SectionBoxTool | undefined;
 	private active = false;
@@ -198,24 +267,26 @@ class PriyamSectionBoxController {
 		return this.active;
 	}
 
-	activateFromModelBounds(): boolean {
+	activateFromModelBounds(mode: SectionBoxMode = 'green-box'): boolean {
 		const fullBox = getModelWorldBounds(this.viewer);
 		if (fullBox.isEmpty()) return false;
 		const envelope = getSectionBoxEnvelopeBounds(fullBox);
 		this.envelopeMin.copy(envelope.min);
 		this.envelopeMax.copy(envelope.max);
 		this.hasEnvelopeBounds = true;
-		this.activate(envelope);
+		this.activate(envelope, mode);
 		return true;
 	}
 
-	activate(box: THREE.Box3): void {
+	activate(box: THREE.Box3, mode: SectionBoxMode = 'green-box'): void {
 		const THREE = getLmvThree();
 		if (!THREE) {
 			console.error('ViewerEnvironment: THREE is not available — cannot show section box');
 			return;
 		}
 
+		this.mode = mode;
+		this.visualConfig = getVisualConfig(mode);
 		this.visibilityState = enableSectionBoxVisibilityMode(this.viewer);
 
 		this.min.copy(box.min);
@@ -240,6 +311,7 @@ class PriyamSectionBoxController {
 		this.unbindNativeGizmoGuard();
 		this.drag = null;
 		this.hoveredFace = null;
+		this.hoveredHandle = null;
 		this.edges = null;
 		this.setCanvasCursor('');
 		this.unregisterTool();
@@ -480,13 +552,14 @@ class PriyamSectionBoxController {
 			this.setPickMeshPosition(face, layout);
 			face.mesh.setRotationFromEuler(layout.rotation);
 			face.pickMesh.setRotationFromEuler(layout.rotation);
-			const pickW = layout.width * SECTION_BOX_STYLE.facePickScale;
-			const pickH = layout.height * SECTION_BOX_STYLE.facePickScale;
+			const pickW = layout.width * this.visualConfig.facePickScale;
+			const pickH = layout.height * this.visualConfig.facePickScale;
 			this.resizePlaneMesh(face.mesh, layout.width, layout.height);
 			this.resizePlaneMesh(face.pickMesh, pickW, pickH);
 		}
 
 		this.updateEdgePositions();
+		this.updateHandlePositions();
 		this.root.updateMatrixWorld(true);
 	}
 
@@ -497,18 +570,17 @@ class PriyamSectionBoxController {
 			this.disposeObject3D(child);
 		}
 		this.faces.length = 0;
+		this.handles.length = 0;
 		this.edges = null;
 
 		for (const layout of this.getFaceLayouts()) {
 			const w = Math.max(layout.width, 0.01);
 			const h = Math.max(layout.height, 0.01);
-			const pickW = w * SECTION_BOX_STYLE.facePickScale;
-			const pickH = h * SECTION_BOX_STYLE.facePickScale;
 
 			const material = new THREE.MeshBasicMaterial({
-				color: SECTION_BOX_STYLE.faceColor,
+				color: this.visualConfig.faceColor,
 				transparent: true,
-				opacity: SECTION_BOX_STYLE.faceOpacity,
+				opacity: this.visualConfig.faceOpacity,
 				side: THREE.DoubleSide,
 				depthWrite: false,
 				depthTest: false,
@@ -520,33 +592,48 @@ class PriyamSectionBoxController {
 			disableMeshRaycast(mesh);
 			this.resizePlaneMesh(mesh, w, h);
 
-			const pickMaterial = new THREE.MeshBasicMaterial({
-				transparent: true,
-				opacity: 0,
-				side: THREE.DoubleSide,
-				depthWrite: false,
-				depthTest: false,
-			});
-			const pickMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pickMaterial);
-			pickMesh.setRotationFromEuler(layout.rotation);
-			pickMesh.renderOrder = 49;
-			pickMesh.userData.isSectionBoxPick = true;
-			this.resizePlaneMesh(pickMesh, pickW, pickH);
-			const pickFace: BoxFace = {
-				mesh,
-				pickMesh,
-				axis: layout.axis,
-				sign: layout.sign,
-				rotation: layout.rotation,
-			};
-			this.setPickMeshPosition(pickFace, layout);
+			if (this.visualConfig.enableFaceDrag) {
+				const pickW = w * this.visualConfig.facePickScale;
+				const pickH = h * this.visualConfig.facePickScale;
+				const pickMaterial = new THREE.MeshBasicMaterial({
+					transparent: true,
+					opacity: 0,
+					side: THREE.DoubleSide,
+					depthWrite: false,
+					depthTest: false,
+				});
+				const pickMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pickMaterial);
+				pickMesh.setRotationFromEuler(layout.rotation);
+				pickMesh.renderOrder = 49;
+				pickMesh.userData.isSectionBoxPick = true;
+				this.resizePlaneMesh(pickMesh, pickW, pickH);
+				const pickFace: BoxFace = {
+					mesh,
+					pickMesh,
+					axis: layout.axis,
+					sign: layout.sign,
+					rotation: layout.rotation,
+				};
+				this.setPickMeshPosition(pickFace, layout);
+				this.root.add(pickMesh);
+				this.faces.push(pickFace);
+			} else {
+				this.faces.push({
+					mesh,
+					pickMesh: mesh,
+					axis: layout.axis,
+					sign: layout.sign,
+					rotation: layout.rotation,
+				});
+			}
 
-			this.root.add(pickMesh);
 			this.root.add(mesh);
-			this.faces.push(pickFace);
 		}
 
 		this.addEdges(THREE);
+		if (this.visualConfig.showHandles) {
+			this.addHandles(THREE);
+		}
 		this.root.updateMatrixWorld(true);
 	}
 
@@ -582,9 +669,9 @@ class PriyamSectionBoxController {
 		const geometry = geometryFromPoints(THREE, points);
 		(geometry as THREE.BufferGeometry & { isLines?: boolean }).isLines = true;
 		const material = new THREE.LineBasicMaterial({
-			color: SECTION_BOX_STYLE.edgeColor,
+			color: this.visualConfig.edgeColor,
 			transparent: true,
-			opacity: SECTION_BOX_STYLE.edgeOpacity,
+			opacity: this.visualConfig.edgeOpacity,
 			depthWrite: false,
 			depthTest: false,
 		});
@@ -597,9 +684,105 @@ class PriyamSectionBoxController {
 
 	private resetFaceMaterial(face: BoxFace): void {
 		const mat = face.mesh.material as THREE.MeshBasicMaterial;
-		mat.color.setHex(SECTION_BOX_STYLE.faceColor);
-		mat.opacity = SECTION_BOX_STYLE.faceOpacity;
+		mat.color.setHex(this.visualConfig.faceColor);
+		mat.opacity = this.visualConfig.faceOpacity;
 		mat.needsUpdate = true;
+	}
+
+	private getHandleSize(): number {
+		const dx = this.max.x - this.min.x;
+		const dy = this.max.y - this.min.y;
+		const dz = this.max.z - this.min.z;
+		const diagonal = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		return Math.max(this.visualConfig.handleMinSize, diagonal * this.visualConfig.handleSizeRatio);
+	}
+
+	private getCornerPosition(cornerIndex: number, target = new THREE.Vector3()): THREE.Vector3 {
+		const signs = CORNER_SIGNS[cornerIndex];
+		target.set(
+			signs[0] > 0 ? this.max.x : this.min.x,
+			signs[1] > 0 ? this.max.y : this.min.y,
+			signs[2] > 0 ? this.max.z : this.min.z
+		);
+		return target;
+	}
+
+	private addHandles(THREE: typeof window.THREE): void {
+		const radius = this.getHandleSize() * 0.5;
+		const pickRadius = radius * 1.8;
+		const visualGeometry = new THREE.SphereGeometry(1, 10, 10);
+		const pickGeometry = new THREE.SphereGeometry(1, 8, 8);
+
+		const createHandle = (axes: AxisSign[], position: THREE.Vector3): void => {
+			const material = new THREE.MeshBasicMaterial({
+				color: this.visualConfig.handleColor,
+				transparent: true,
+				opacity: this.visualConfig.handleOpacity,
+				depthWrite: false,
+				depthTest: false,
+			});
+			const mesh = new THREE.Mesh(visualGeometry, material);
+			mesh.position.copy(position);
+			mesh.renderOrder = 54;
+			disableMeshRaycast(mesh);
+
+			const pickMaterial = new THREE.MeshBasicMaterial({
+				transparent: true,
+				opacity: 0,
+				depthWrite: false,
+				depthTest: false,
+			});
+			const pickMesh = new THREE.Mesh(pickGeometry, pickMaterial);
+			pickMesh.position.copy(position);
+			pickMesh.renderOrder = 53;
+			pickMesh.userData.isSectionBoxPick = true;
+
+			this.root.add(mesh);
+			this.root.add(pickMesh);
+			this.handles.push({ mesh, pickMesh, axes });
+		};
+
+		for (let i = 0; i < CORNER_SIGNS.length; i++) {
+			createHandle(axesForCorner(i), this.getCornerPosition(i));
+		}
+	}
+
+	private updateHandlePositions(): void {
+		if (!this.visualConfig.showHandles || this.handles.length === 0) return;
+
+		const radius = this.getHandleSize() * 0.5;
+		const pickRadius = radius * 1.8;
+		this.handles.forEach((handle, cornerIndex) => {
+			const position = this.getCornerPosition(cornerIndex);
+			handle.mesh.position.copy(position);
+			handle.pickMesh.position.copy(position);
+			this.resizeSphereMesh(handle.mesh, radius);
+			this.resizeSphereMesh(handle.pickMesh, pickRadius);
+		});
+	}
+
+	private resizeSphereMesh(mesh: THREE.Mesh, radius: number): void {
+		const size = Math.max(radius, 0.01);
+		mesh.scale.set(size, size, size);
+	}
+
+	private setHandleHover(handle: BoxHandle | null): void {
+		if (this.hoveredHandle === handle) return;
+		if (this.hoveredHandle) {
+			const mat = this.hoveredHandle.mesh.material as THREE.MeshBasicMaterial;
+			mat.color.setHex(this.visualConfig.handleColor);
+			mat.needsUpdate = true;
+		}
+		this.hoveredHandle = handle;
+		if (handle) {
+			const mat = handle.mesh.material as THREE.MeshBasicMaterial;
+			mat.color.setHex(0x5a5a5a);
+			mat.needsUpdate = true;
+			this.setCanvasCursor(this.getCursorForAxes(handle.axes));
+		} else if (!this.drag && !this.hoveredFace) {
+			this.setCanvasCursor('');
+		}
+		this.viewer.impl.invalidate(false, false, true);
 	}
 
 	private getCursorForAxes(axes: AxisSign[]): string {
@@ -800,8 +983,8 @@ class PriyamSectionBoxController {
 		this.hoveredFace = face;
 		if (face) {
 			const mat = face.mesh.material as THREE.MeshBasicMaterial;
-			mat.color.setHex(SECTION_BOX_STYLE.faceHoverColor);
-			mat.opacity = SECTION_BOX_STYLE.faceHoverOpacity;
+			mat.color.setHex(this.visualConfig.faceHoverColor);
+			mat.opacity = this.visualConfig.faceHoverOpacity;
 			mat.needsUpdate = true;
 			this.setCanvasCursor(this.getCursorForFace(face));
 		} else if (!this.drag) {
@@ -832,7 +1015,7 @@ class PriyamSectionBoxController {
 
 	private isPointOnFace(point: THREE.Vector3, face: BoxFace): boolean {
 		const eps = this.facePickEpsilon();
-		const pickScale = SECTION_BOX_STYLE.facePickScale;
+		const pickScale = this.visualConfig.facePickScale;
 		const expand = (a: number, b: number): { min: number; max: number } => {
 			const center = (a + b) * 0.5;
 			const half = ((b - a) * 0.5) * pickScale;
@@ -861,6 +1044,8 @@ class PriyamSectionBoxController {
 	}
 
 	private pickFace(event: LmvCanvasPointerEvent): { face: BoxFace; point: THREE.Vector3 } | null {
+		if (!this.visualConfig.enableFaceDrag) return null;
+
 		this.root.updateMatrixWorld(true);
 		updateRaycasterFromLmvEvent(this.viewer, this.raycaster, event);
 
@@ -891,6 +1076,35 @@ class PriyamSectionBoxController {
 		}
 
 		return closest ? { face: closest.face, point: closest.point } : null;
+	}
+
+	private getAxesNormal(axes: AxisSign[], target = new THREE.Vector3()): THREE.Vector3 {
+		target.set(0, 0, 0);
+		for (const { axis, sign } of axes) {
+			target[axis] += sign;
+		}
+		if (target.lengthSq() < 1e-12) {
+			target.set(0, 1, 0);
+		} else {
+			target.normalize();
+		}
+		return target;
+	}
+
+	private pickHandle(event: LmvCanvasPointerEvent): { handle: BoxHandle; point: THREE.Vector3 } | null {
+		if (!this.visualConfig.showHandles || this.handles.length === 0) return null;
+
+		this.root.updateMatrixWorld(true);
+		updateRaycasterFromLmvEvent(this.viewer, this.raycaster, event);
+		const hits = this.raycaster.intersectObjects(
+			this.handles.map(handle => handle.pickMesh),
+			false
+		);
+		if (hits.length === 0) return null;
+
+		const handle = this.handles.find(item => item.pickMesh === hits[0].object);
+		if (!handle) return null;
+		return { handle, point: hits[0].point.clone() };
 	}
 
 	private getFaceAnchor(face: BoxFace): THREE.Vector3 {
@@ -971,6 +1185,35 @@ class PriyamSectionBoxController {
 		}
 	}
 
+	/** Move handles by direct per-axis delta from the grab point. */
+	private applyHandleDragFromHit(drag: DragState, hitPoint: THREE.Vector3): void {
+		for (const { axis, sign } of drag.axes) {
+			const delta = hitPoint[axis] - drag.startHit[axis];
+			if (sign > 0) {
+				let next = drag.startMax[axis] + delta;
+				next = Math.max(drag.startMin[axis] + MIN_BOX_SIZE, next);
+				if (this.hasEnvelopeBounds) {
+					next = Math.min(this.envelopeMax[axis], next);
+				}
+				this.max[axis] = next;
+			} else {
+				let next = drag.startMin[axis] + delta;
+				next = Math.min(drag.startMax[axis] - MIN_BOX_SIZE, next);
+				if (this.hasEnvelopeBounds) {
+					next = Math.max(this.envelopeMin[axis], next);
+				}
+				this.min[axis] = next;
+			}
+		}
+	}
+
+	private buildHandleDragHitPlanes(anchor: THREE.Vector3): THREE.Plane[] {
+		return [
+			new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), anchor),
+			new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), anchor),
+		];
+	}
+
 	private primaryFaceForAxes(axes: AxisSign[]): BoxFace | null {
 		const first = axes[0];
 		if (!first) return null;
@@ -989,24 +1232,49 @@ class PriyamSectionBoxController {
 				return true;
 			}
 
-			this.applyDragFromHit(this.drag, hit);
+			if (this.drag.mode === 'handle') {
+				this.applyHandleDragFromHit(this.drag, hit);
+			} else {
+				this.applyDragFromHit(this.drag, hit);
+			}
 			this.updateBoxTransforms();
 			this.applySectioning();
 
-			const draggingFace = this.primaryFaceForAxes(this.drag.axes);
-			if (draggingFace) {
-				this.setFaceHover(draggingFace);
+			if (this.drag.mode === 'handle') {
+				const handle = this.handles.find(
+					item =>
+						item.axes.length === this.drag?.axes.length &&
+						item.axes.every((axis, index) => {
+							const other = this.drag?.axes[index];
+							return other?.axis === axis.axis && other.sign === axis.sign;
+						})
+				);
+				if (handle) this.setHandleHover(handle);
+			} else {
+				const draggingFace = this.primaryFaceForAxes(this.drag.axes);
+				if (draggingFace) {
+					this.setFaceHover(draggingFace);
+				}
 			}
 			this.viewer.impl.invalidate(false, false, true);
 			return true;
 		}
 
+		const handlePick = this.pickHandle(event);
+		if (handlePick) {
+			this.setHandleHover(handlePick.handle);
+			this.setFaceHover(null);
+			return true;
+		}
+
 		const pick = this.pickFace(event);
 		if (pick) {
+			this.setHandleHover(null);
 			this.setFaceHover(pick.face);
 			return true;
 		}
 
+		this.setHandleHover(null);
 		this.setFaceHover(null);
 		return false;
 	}
@@ -1014,6 +1282,33 @@ class PriyamSectionBoxController {
 	public onMouseDown(event: LmvCanvasPointerEvent, button = 0): boolean {
 		if (!this.active) return false;
 		if (button !== 0) return false;
+
+		const handlePick = this.pickHandle(event);
+		if (handlePick) {
+			const { handle } = handlePick;
+			const anchor = handlePick.point.clone();
+			const faceNormal = this.getAxesNormal(handle.axes, new THREE.Vector3());
+			const hitPlanes = this.buildHandleDragHitPlanes(anchor);
+			updateRaycasterFromLmvEvent(this.viewer, this.raycaster, event);
+			this.drag = {
+				mode: 'handle',
+				axes: handle.axes.map(item => ({ ...item })),
+				hitPlanes,
+				faceNormal,
+				startMin: this.min.clone(),
+				startMax: this.max.clone(),
+				startHit: anchor,
+			};
+			const startHit = this.intersectDragPlanes();
+			if (startHit) {
+				this.drag.startHit.copy(startHit);
+			}
+			this.sectioningActive = true;
+			this.applySectioning();
+			this.setHandleHover(handle);
+			this.setCanvasCursor(this.getCursorForAxes(handle.axes));
+			return true;
+		}
 
 		const pick = this.pickFace(event);
 		if (pick) {
@@ -1023,6 +1318,7 @@ class PriyamSectionBoxController {
 			const hitPlanes = this.buildDragHitPlanes(face, anchor);
 			updateRaycasterFromLmvEvent(this.viewer, this.raycaster, event);
 			this.drag = {
+				mode: 'face',
 				axes: [{ axis: face.axis, sign: face.sign }],
 				hitPlanes,
 				faceNormal,
@@ -1050,9 +1346,19 @@ class PriyamSectionBoxController {
 
 		const wasDragging = Boolean(this.drag);
 		if (this.drag) {
-			const face = this.primaryFaceForAxes(this.drag.axes);
-			if (face) {
-				this.setFaceHover(face);
+			if (this.drag.mode === 'handle') {
+				const handle = this.handles.find(
+					item => item.axes.length === this.drag?.axes.length && item.axes.every((axis, index) => {
+						const other = this.drag?.axes[index];
+						return other?.axis === axis.axis && other.sign === axis.sign;
+					})
+				);
+				if (handle) this.setHandleHover(handle);
+			} else {
+				const face = this.primaryFaceForAxes(this.drag.axes);
+				if (face) {
+					this.setFaceHover(face);
+				}
 			}
 		}
 		this.drag = null;
@@ -1060,7 +1366,7 @@ class PriyamSectionBoxController {
 			this.applySectioning();
 			this.viewer.impl.invalidate(true, false, true);
 		}
-		if (!this.hoveredFace) {
+		if (!this.hoveredFace && !this.hoveredHandle) {
 			this.setCanvasCursor('');
 		}
 		return Boolean(this.hoveredFace);
@@ -1076,21 +1382,27 @@ const getController = (viewer: Autodesk.Viewing.GuiViewer3D): PriyamSectionBoxCo
 	return controller;
 };
 
-export const activatePriyamSectionBox = (viewer: Autodesk.Viewing.GuiViewer3D): boolean =>
-	getController(viewer).activateFromModelBounds();
+export const activatePriyamSectionBox = (
+	viewer: Autodesk.Viewing.GuiViewer3D,
+	mode: SectionBoxMode = 'green-box'
+): boolean => getController(viewer).activateFromModelBounds(mode);
 
 export const deactivatePriyamSectionBox = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
 	getController(viewer).deactivate();
 };
 
-export const togglePriyamSectionBox = (viewer: Autodesk.Viewing.GuiViewer3D, enable?: boolean): boolean => {
+export const togglePriyamSectionBox = (
+	viewer: Autodesk.Viewing.GuiViewer3D,
+	enable?: boolean,
+	mode: SectionBoxMode = 'green-box'
+): boolean => {
 	const controller = getController(viewer);
 	const shouldEnable = enable ?? !controller.isActive();
 	if (!shouldEnable) {
 		controller.deactivate();
 		return false;
 	}
-	return controller.activateFromModelBounds();
+	return controller.activateFromModelBounds(mode);
 };
 
 export const isPriyamSectionBoxActive = (viewer: Autodesk.Viewing.GuiViewer3D): boolean =>

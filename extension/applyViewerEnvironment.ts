@@ -1,8 +1,13 @@
 import { clearBuildingColorScheme } from './viewerBuildingColorScheme';
 import { applyCadBimGroundAndEnvFlags, getLmvImplWithLights } from './lmvImplInternals';
-import { ensureCadBimGrid, removeCadBimGrid } from './viewerEnvironmentGrid';
+import { ensureCadBimGrid, ensureUnityGrid } from './viewerEnvironmentGrid';
 import { isViewerModelReady } from './viewerEnvironmentLifecycle';
-import { ACC_DEFAULT, CAD_BIM_BACKGROUND, CAD_BIM_LIGHTING } from './viewerEnvironmentSpec';
+import {
+	ACC_DEFAULT,
+	CAD_BIM_BACKGROUND,
+	CAD_BIM_LIGHTING,
+	UNITY_BACKGROUND,
+} from './viewerEnvironmentSpec';
 import { setViewerEnvironmentDomState } from './viewerEnvironmentDom';
 import { DEFAULT_VIEWER_ENVIRONMENT_ID, ViewerEnvironmentId } from './viewerEnvironments';
 
@@ -15,10 +20,18 @@ export interface ViewerEnvironmentApplyOptions {
 const CAD_BIM_REAPPLY_DELAYS_MS = [500, 2000] as const;
 
 let cadBimReapplyGeneration = 0;
+let unityGridReapplyGeneration = 0;
 
 const cancelScheduledCadBimReapply = (): void => {
 	cadBimReapplyGeneration += 1;
 };
+
+const cancelScheduledUnityGridReapply = (): void => {
+	unityGridReapplyGeneration += 1;
+};
+
+/** Delays to re-apply Unity grid after model geometry settles. */
+const UNITY_GRID_REAPPLY_DELAYS_MS = [500, 2000] as const;
 
 const applyCadBimBackground = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
 	try {
@@ -52,6 +65,7 @@ const applyCadBimLighting = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
 };
 
 const applyCadBimVisualsNow = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
+	cancelScheduledUnityGridReapply();
 	applyCadBimLighting(viewer);
 	applyCadBimBackground(viewer);
 	ensureCadBimGrid(viewer);
@@ -72,14 +86,54 @@ const scheduleCadBimBackdropReapply = (viewer: Autodesk.Viewing.GuiViewer3D): vo
 	}
 };
 
+const scheduleUnityGridReapply = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
+	const generation = unityGridReapplyGeneration;
+	for (const delayMs of UNITY_GRID_REAPPLY_DELAYS_MS) {
+		window.setTimeout(() => {
+			if (generation !== unityGridReapplyGeneration) return;
+			if (!isViewerModelReady(viewer)) return;
+			applyCadBimGroundAndEnvFlags(viewer);
+			applyAccDefaultBackground(viewer);
+			ensureUnityGrid(viewer);
+			viewer.impl.invalidate(true, false, false);
+		}, delayMs);
+	}
+};
+
+const applyAccDefaultBackground = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
+	try {
+		const { r, g, b } = UNITY_BACKGROUND;
+		if (typeof viewer.setEnvMapBackground === 'function') {
+			viewer.setEnvMapBackground(false);
+		}
+		const impl = viewer.impl as {
+			setClearColors?: (r1: number, g1: number, b1: number, r2: number, g2: number, b2: number) => void;
+			toggleEnvMapBackground?: (value: boolean) => void;
+		};
+		impl.toggleEnvMapBackground?.(false);
+		impl.setClearColors?.(r, g, b, r, g, b);
+		viewer.setBackgroundColor(r, g, b, r, g, b);
+	} catch (error) {
+		console.warn('ViewerEnvironment: acc-default background apply failed', error);
+	}
+};
+
 const applyAccDefault = (viewer: Autodesk.Viewing.GuiViewer3D): void => {
 	cancelScheduledCadBimReapply();
-	removeCadBimGrid(viewer);
+	cancelScheduledUnityGridReapply();
 	clearBuildingColorScheme(viewer);
 
 	viewer.setLightPreset(ACC_DEFAULT.lightPresetIndex);
-	const [tR, tG, tB, bR, bG, bB] = ACC_DEFAULT.background;
-	viewer.setBackgroundColor(tR, tG, tB, bR, bG, bB);
+	// Avalon re-enables LMV ground reflection (white outer ruler ticks) — keep our overlay only.
+	applyCadBimGroundAndEnvFlags(viewer);
+	applyAccDefaultBackground(viewer);
+	ensureUnityGrid(viewer);
+	// Re-assert after grid — Avalon can reset clear colors to solid black.
+	applyAccDefaultBackground(viewer);
+	if (isViewerModelReady(viewer)) {
+		scheduleUnityGridReapply(viewer);
+	}
+	viewer.impl.invalidate(true, false, false);
 };
 
 /** Canvas color only — safe before the model finishes loading. */

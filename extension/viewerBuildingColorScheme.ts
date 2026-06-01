@@ -120,9 +120,15 @@ export const clearBuildingColorScheme = (viewer: Autodesk.Viewing.GuiViewer3D): 
 	viewer.impl.invalidate(true, false, false);
 };
 
+export interface BuildingColorSchemeApplyOptions {
+	/** Leaf dbIds to skip (e.g. furnishings hidden at low rendering detail). */
+	excludeDbIds?: ReadonlySet<number>;
+}
+
 export const applyBuildingColorScheme = (
 	viewer: Autodesk.Viewing.GuiViewer3D,
-	schemeId: BuildingColorSchemeId
+	schemeId: BuildingColorSchemeId,
+	options?: BuildingColorSchemeApplyOptions
 ): boolean => {
 	if (schemeId === 'none') {
 		clearBuildingColorScheme(viewer);
@@ -163,6 +169,7 @@ export const applyBuildingColorScheme = (
 		rootId,
 		(dbId: number) => {
 			if (tree.getChildCount(dbId) > 0) return;
+			if (options?.excludeDbIds?.has(dbId)) return;
 			leaves.push({
 				dbId,
 				name: tree.getNodeName(dbId) ?? '',

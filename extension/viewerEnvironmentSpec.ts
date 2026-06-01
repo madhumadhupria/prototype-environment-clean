@@ -18,10 +18,13 @@ export const CAD_BIM_GRID = {
 	majorColor: 0x355f8a,
 	edgeColor: 0x254a6e,
 	lineOpacity: 0.52,
+	majorLineOpacity: 0.52,
 	edgeOpacity: 0.36,
 	majorStep: 5,
-	/** Tiny lift to reduce z-fighting; grid sits flush with the model base. */
-	floorLift: 0.001,
+	showFootprintEdge: true,
+	showAxisLines: false,
+	/** Tiny lift to reduce z-fighting; keep at 0 so the grid meets the model base. */
+	floorLift: 0,
 	/** Hide grid when the camera drops below this offset from the floor plane. */
 	belowCameraEpsilon: 0.15,
 	/** Back-face ground cap — blocks seeing through the floor from underneath. */
@@ -36,6 +39,52 @@ export const CAD_BIM_GRID = {
 	fadeCutoffOpacity: 0.04,
 } as const;
 
+/** Gridlines option 2 — dark workspace + Unity-style floor grid. */
+export const UNITY_GRID = {
+	minHalfExtent: 12,
+	footprintPadding: 3.8,
+	/** Aim for uniform cube-like cells across the padded footprint. */
+	targetCellsAcross: 48,
+	targetCellSize: 1,
+	minDivisions: 20,
+	maxDivisions: 120,
+	minorColor: 0x5c6678,
+	majorColor: 0x5c6678,
+	lineOpacity: 0.22,
+	majorLineOpacity: 0.22,
+	majorStep: 10,
+	showMajorLines: false,
+	showFootprintEdge: false,
+	showAxisLines: true,
+	/** Center axis along U — red (X). */
+	axisUColor: 0xff4d4d,
+	/** Center axis along V — blue (Z). */
+	axisVColor: 0x4d9fff,
+	axisOpacity: 0.72,
+	floorLift: 0,
+	/** Slight lift for line geometry only — avoids z-fighting with the model base. */
+	gridSurfaceLift: 0.003,
+	/** Hide grid only when the camera drops below the floor plane. */
+	belowCameraEpsilon: 0.15,
+	groundOccluderScale: 1.6,
+	groundLocked: true,
+	/** Fade outer ring sooner so edge lines do not read as bright white. */
+	fadeCoreRatio: 0.68,
+	fadeMinOpacity: 0,
+	fadeSegmentsPerLine: 8,
+	fadeOpacityBuckets: 12,
+	fadeCutoffOpacity: 0.03,
+} as const;
+
+export type EnvironmentGridConfig = typeof CAD_BIM_GRID | typeof UNITY_GRID;
+
+/** Dark bluish-grey workspace for Gridlines option 2 (#1a2433). */
+export const UNITY_BACKGROUND = {
+	r: 26,
+	g: 36,
+	b: 51,
+} as const;
+
 /** Translucent green section box — light faces, darker green on hover. */
 export const SECTION_BOX_STYLE = {
 	faceColor: 0x4ade80,
@@ -45,6 +94,21 @@ export const SECTION_BOX_STYLE = {
 	edgeColor: 0x166534,
 	edgeOpacity: 0.85,
 	facePickScale: 1.04,
+} as const;
+
+/** Section tool 2 — Unity-style outline box with corner/edge resize handles. */
+export const OUTLINE_SECTION_BOX_STYLE = {
+	faceColor: 0xf2f2f2,
+	faceOpacity: 0.14,
+	faceHoverColor: 0xffffff,
+	faceHoverOpacity: 0.2,
+	edgeColor: 0x4a4a4a,
+	edgeOpacity: 0.92,
+	facePickScale: 1.04,
+	handleColor: 0x3a3a3a,
+	handleOpacity: 1,
+	handleSizeRatio: 0.014,
+	handleMinSize: 0.1,
 } as const;
 
 /** Padding around model bounds — section box cannot expand beyond this envelope. */
@@ -92,8 +156,16 @@ export const CAD_BIM_HOME_VIEW = {
 } as const;
 
 export const ACC_DEFAULT = {
-	lightPresetIndex: 4,
-	background: [220, 224, 229, 250, 250, 250] as const,
+	/** Grey Room — canvas color comes from UNITY_BACKGROUND, not the preset gradient. */
+	lightPresetIndex: 3,
+	background: [
+		UNITY_BACKGROUND.r,
+		UNITY_BACKGROUND.g,
+		UNITY_BACKGROUND.b,
+		UNITY_BACKGROUND.r,
+		UNITY_BACKGROUND.g,
+		UNITY_BACKGROUND.b,
+	] as const,
 } as const;
 
 export const VIEWER_ENVIRONMENT_OVERLAY_SCENE = 'priyam-viewer-environment-grid';
