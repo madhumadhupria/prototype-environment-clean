@@ -325,6 +325,46 @@ const CSS = `
 	border-color: rgba(255, 255, 255, 0.75);
 	color: #ffffff;
 }
+.priyam-prototype-strip__toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 14px;
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	border-radius: 4px;
+	background: transparent;
+	color: #f5f5f5;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 20px;
+	cursor: pointer;
+	transition:
+		background-color 120ms ease,
+		border-color 120ms ease,
+		color 120ms ease;
+}
+.priyam-prototype-strip__toggle:hover {
+	background: rgba(255, 255, 255, 0.08);
+	border-color: rgba(255, 255, 255, 0.65);
+	color: #ffffff;
+}
+.priyam-prototype-strip__toggle:focus-visible {
+	outline: 2px solid #ffffff;
+	outline-offset: 2px;
+}
+.priyam-prototype-strip__toggle--active {
+	background: rgba(255, 138, 42, 0.18);
+	border-color: #ff8a2a;
+	color: #ffffff;
+}
+.priyam-prototype-strip__toggle-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+}
 .priyam-prototype-strip__chevron {
 	width: 8px;
 	height: 8px;

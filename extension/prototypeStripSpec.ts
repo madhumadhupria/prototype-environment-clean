@@ -4,7 +4,7 @@ import type { ViewerEnvironmentId } from './viewerEnvironments';
 export type SectionPrototypeId = 'green-box' | 'outlines';
 
 export interface EnvironmentPrototypeOption {
-	id: ViewerEnvironmentId | 'background-texture';
+	id: ViewerEnvironmentId;
 	label: string;
 	description: string;
 	disabled?: boolean;
@@ -13,7 +13,6 @@ export interface EnvironmentPrototypeOption {
 export const ENVIRONMENT_PROTOTYPES: EnvironmentPrototypeOption[] = [
 	{ id: 'cad-bim-neutral', label: 'Neutral Gridlines', description: 'Gridlines option 1' },
 	{ id: 'acc-default', label: 'Gridlines', description: 'Gridlines Option 2' },
-	{ id: 'background-texture', label: 'Background', description: 'Background texture', disabled: true },
 ];
 
 export interface SectionPrototypeOption {

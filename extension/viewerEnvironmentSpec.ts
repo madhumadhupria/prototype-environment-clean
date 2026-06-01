@@ -171,3 +171,31 @@ export const ACC_DEFAULT = {
 export const VIEWER_ENVIRONMENT_OVERLAY_SCENE = 'priyam-viewer-environment-grid';
 export const SECTION_BOX_OVERLAY_SCENE = 'priyam-viewer-environment-section-box';
 export const SECTION_BOX_CUT_PLANE_SET = 'priyam-viewer-environment-section-cut';
+export const ROTATE_GIZMO_OVERLAY_SCENE = 'priyam-viewer-environment-rotate-gizmo';
+export const ROTATE_HIGHLIGHT_OVERLAY_SCENE = 'priyam-viewer-environment-rotate-highlight';
+
+/** Rotate gizmo — Blender-style orbit arcs at building corner pivot. */
+export const ROTATE_GIZMO_STYLE = {
+	outlineColor: 0xff8a2a,
+	outlineOpacity: 0.45,
+	pivotColor: 0xffffff,
+	pivotBorderColor: 0x1c2430,
+	pivotRadiusRatio: 0.006,
+	/** Arc radius as a fraction of horizontal footprint span. */
+	ringRadiusRatio: 0.08,
+	maxRingRadius: 2,
+	minRingRadius: 0.28,
+	/** Visible arc span (π = semi-circle on outer edge). */
+	arcSpanRadians: Math.PI,
+	arcSegments: 36,
+	arcLineOpacity: 0.72,
+	arcLineActiveOpacity: 0.95,
+	/** World-space line pick tolerance for thin arcs. */
+	arcPickThreshold: 0.14,
+	axisUColor: 0xff4d4d,
+	axisVColor: 0x5fd35f,
+	horizontalColor: 0x4d9fff,
+	arcColor: 0xffffff,
+	arcOpacity: 0.55,
+	sectorOpacity: 0.14,
+} as const;

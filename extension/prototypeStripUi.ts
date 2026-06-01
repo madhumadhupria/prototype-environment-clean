@@ -20,6 +20,7 @@ export interface PrototypeStripState {
 	sectionPrototypeId: SectionPrototypeOption['id'] | null;
 	renderingDetailLevel: RenderingDetailLevel;
 	sectionActive: boolean;
+	rotateActive: boolean;
 }
 
 export interface PrototypeStripHandlers {
@@ -27,6 +28,7 @@ export interface PrototypeStripHandlers {
 	onSectionSelect: (id: SectionPrototypeOption['id']) => void;
 	onSectionClear: () => void;
 	onRenderingDetailSelect: (level: RenderingDetailLevel) => void;
+	onRotateToggle: () => void;
 }
 
 const isViewerEnvironmentId = (value: string): value is ViewerEnvironmentId =>
@@ -87,6 +89,7 @@ export class PrototypeStripUi {
 	private readonly strip: HTMLDivElement;
 	private readonly menuLayer: HTMLDivElement;
 	private readonly buttons = new Map<PrototypeStripMenuId, HTMLButtonElement>();
+	private rotateButton: HTMLButtonElement | undefined;
 	private openMenuId: PrototypeStripMenuId | null = null;
 	private menuElement: HTMLDivElement | undefined;
 	private documentClickHandler: ((event: MouseEvent) => void) | undefined;
@@ -118,6 +121,7 @@ export class PrototypeStripUi {
 
 	public updateState(partial: Partial<PrototypeStripState>): void {
 		this.state = { ...this.state, ...partial };
+		this.syncRotateButton();
 		if (this.openMenuId) {
 			this.renderMenu(this.openMenuId);
 		}
@@ -126,6 +130,32 @@ export class PrototypeStripUi {
 	public destroy(): void {
 		this.closeMenu();
 		this.strip.remove();
+	}
+
+	private addRotateToggleButton(): void {
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = `${STRIP_CLASS}__toggle`;
+		button.setAttribute('aria-pressed', 'false');
+		button.setAttribute('aria-label', 'Rotate');
+		button.innerHTML = `
+			<span class="${STRIP_CLASS}__toggle-icon" aria-hidden="true">${rotateIconMarkup()}</span>
+			<span class="${STRIP_CLASS}__trigger-label">Rotate</span>
+		`;
+		button.addEventListener('click', event => {
+			event.stopPropagation();
+			this.handlers.onRotateToggle();
+		});
+		this.rotateButton = button;
+		this.strip.insertBefore(button, this.menuLayer);
+		this.syncRotateButton();
+	}
+
+	private syncRotateButton(): void {
+		if (!this.rotateButton) return;
+		const active = this.state.rotateActive;
+		this.rotateButton.setAttribute('aria-pressed', active ? 'true' : 'false');
+		this.rotateButton.classList.toggle(`${STRIP_CLASS}__toggle--active`, active);
 	}
 
 	private addDropdownButton(id: PrototypeStripMenuId, label: string): void {
@@ -297,3 +327,15 @@ export class PrototypeStripUi {
 		this.openMenuId = null;
 	}
 }
+
+const rotateIconMarkup = (): string => `
+	<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+		<path
+			d="M11.2 2.4a4.8 4.8 0 1 0 1.2 7.1"
+			stroke="currentColor"
+			stroke-width="1.4"
+			stroke-linecap="round"
+		/>
+		<path d="M12.4 2.4H9.6V5.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+	</svg>
+`;

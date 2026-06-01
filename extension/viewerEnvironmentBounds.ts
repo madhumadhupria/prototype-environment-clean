@@ -6,7 +6,7 @@ const isPrimaryStructural3DModel = (model: Autodesk.Viewing.Model): boolean => {
 	return !data?.is2d;
 };
 
-const getHorizontalAxes = (
+export const getModelHorizontalAxes = (
 	up: THREE.Vector3,
 	THREE: typeof window.THREE
 ): { axisU: THREE.Vector3; axisV: THREE.Vector3 } => {
@@ -104,7 +104,7 @@ export const getModelFloorWorldLevel = (
 	const box = getModelWorldBounds(viewer);
 	if (box.isEmpty()) return aabbFloorW;
 
-	const { axisU, axisV } = getHorizontalAxes(up, THREE);
+	const { axisU, axisV } = getModelHorizontalAxes(up, THREE);
 	const corners = getBoxCorners(box);
 	let uMin = Number.POSITIVE_INFINITY;
 	let vMin = Number.POSITIVE_INFINITY;
@@ -185,6 +185,47 @@ export const getModelWorldUp = (viewer: Autodesk.Viewing.GuiViewer3D): THREE.Vec
 	}
 
 	return new THREE.Vector3(0, 1, 0);
+};
+
+/**
+ * Bottom-right corner of the building footprint on the floor plane (rotate gizmo pivot).
+ */
+export const getBuildingRotatePivot = (viewer: Autodesk.Viewing.GuiViewer3D): THREE.Vector3 | null => {
+	const THREE = getLmvThree();
+	if (!THREE) return null;
+
+	const box = getModelWorldBounds(viewer);
+	if (box.isEmpty()) return null;
+
+	const up = getModelWorldUp(viewer);
+	const { axisU, axisV } = getModelHorizontalAxes(up, THREE);
+	const corners = getBoxCorners(box);
+
+	let floorW = Number.POSITIVE_INFINITY;
+	for (const corner of corners) {
+		floorW = Math.min(floorW, corner.dot(up));
+	}
+
+	let pivot: THREE.Vector3 | null = null;
+	let bestU = Number.NEGATIVE_INFINITY;
+	let bestV = Number.POSITIVE_INFINITY;
+	const floorEpsilon = Math.max(0.02, (box.max.distanceTo(box.min) || 1) * 0.002);
+
+	for (const corner of corners) {
+		if (Math.abs(corner.dot(up) - floorW) > floorEpsilon) continue;
+		const u = corner.dot(axisU);
+		const v = corner.dot(axisV);
+		if (u > bestU + 1e-6 || (Math.abs(u - bestU) <= 1e-6 && v < bestV)) {
+			bestU = u;
+			bestV = v;
+			pivot = corner;
+		}
+	}
+
+	if (pivot) return pivot.clone();
+
+	const center = box.getCenter(new THREE.Vector3());
+	return center.add(up.clone().multiplyScalar(floorW - center.dot(up)));
 };
 
 export const getModelWorldBounds = (viewer: Autodesk.Viewing.GuiViewer3D): THREE.Box3 => {
