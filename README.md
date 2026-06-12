@@ -47,28 +47,6 @@ scripts/                 # Local dev helpers (config writer, local token server)
 
 ---
 
-## Is Vercel necessary?
-
-**Vercel is not required for the viewer itself** — GitHub Pages hosts the app.
-
-**But some server-side token endpoint is required for the live site**, because:
-
-- GitHub Pages only serves static files. It cannot safely store your APS client secret or mint tokens.
-- The viewer needs a short-lived APS access token to load the model.
-- Putting the client secret in the browser bundle would expose it to anyone.
-
-So the split is:
-
-| Part | Hosted on |
-|------|-----------|
-| Viewer UI + extension code | GitHub Pages |
-| APS token (`/api/token`) | Vercel (or any similar server) |
-
-**Locally, you do not need Vercel.** Run `scripts/local-token-server.mjs` instead — it reads `APS_CLIENT_ID` and `APS_CLIENT_SECRET` from your `.env`.
-
-**You could remove Vercel** if you replaced it with another backend that does the same job (e.g. AWS Lambda, Cloudflare Worker, a small Node server). The app only cares about the `tokenUrl` in `config.json`, not where that server runs.
-
----
 
 ## What you need to provide
 
