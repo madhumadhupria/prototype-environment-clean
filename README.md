@@ -19,7 +19,7 @@ Extension logic is copied from [viewer-environment](https://github.com/madhumadh
 4. **Before the model loads**, the viewer asks for an access token by calling the token URL (currently Vercel).
 5. **With that token**, the viewer opens the model from APS and the custom extension applies the CAD/BIM neutral backdrop and grid.This is hidden in the clean branch.
 
-Nothing secret lives in the GitHub Pages files. The model URN is public; the APS client secret stays on the token server.
+The model URN is public; the APS client secret stays on the token server.
 
 ---
 
