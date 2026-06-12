@@ -48,7 +48,7 @@ scripts/                 # Local dev helpers (config writer, local token server)
 ---
 
 
-## What you need to provide
+## What you need to provide - if requirement arises for cloning and redeploying purposes
 
 | Item | Where to get it |
 |------|-----------------|
