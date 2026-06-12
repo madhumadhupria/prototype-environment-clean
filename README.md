@@ -10,13 +10,74 @@ Extension logic is copied from [viewer-environment](https://github.com/madhumadh
 
 ---
 
+## How it works
+
+At a high level, the app is a single web page that loads a 3D model in the Autodesk Viewer.
+
+1. **The browser loads the page** from GitHub Pages (`index.html` + bundled JavaScript).
+2. **The APS Viewer library** is pulled from Autodesk’s CDN (`viewer3D.min.js`).
+3. **The app reads `public/config.json`** to get the model URN and token URL.
+4. **Before the model loads**, the viewer asks for an access token by calling the token URL (currently Vercel).
+5. **With that token**, the viewer opens the model from APS and the custom extension applies the CAD/BIM neutral backdrop and grid.
+
+Nothing secret lives in the GitHub Pages files. The model URN is public; the APS client secret stays on the token server.
+
+---
+
+## How it is built and deployed
+
+The source is TypeScript. **Vite** bundles it into plain static files for the browser.
+
+| Step | What happens |
+|------|----------------|
+| `npm run config` | Writes `public/config.json` from `.env` (local) or GitHub Actions variables (deploy) |
+| `npm run build` | Vite compiles `src/` + `extension/` → `dist/` (HTML, JS, config) |
+| GitHub Actions | On push to `main`, runs `pnpm install` + `pnpm run build`, then uploads `dist/` to GitHub Pages |
+
+Locally you run `npm run dev` instead — Vite serves the files with hot reload on port 5173.
+
+**Folder roles:**
+
+```
+src/main.ts              # Boots the viewer, loads the model
+extension/               # CAD/BIM backdrop, grid, camera, etc.
+public/config.json       # Model URN + token URL (generated, not hand-edited for deploy)
+api/token.js             # Serverless token endpoint (for Vercel, not used by GitHub Pages directly)
+scripts/                 # Local dev helpers (config writer, local token server)
+```
+
+---
+
+## Is Vercel necessary?
+
+**Vercel is not required for the viewer itself** — GitHub Pages hosts the app.
+
+**But some server-side token endpoint is required for the live site**, because:
+
+- GitHub Pages only serves static files. It cannot safely store your APS client secret or mint tokens.
+- The viewer needs a short-lived APS access token to load the model.
+- Putting the client secret in the browser bundle would expose it to anyone.
+
+So the split is:
+
+| Part | Hosted on |
+|------|-----------|
+| Viewer UI + extension code | GitHub Pages |
+| APS token (`/api/token`) | Vercel (or any similar server) |
+
+**Locally, you do not need Vercel.** Run `scripts/local-token-server.mjs` instead — it reads `APS_CLIENT_ID` and `APS_CLIENT_SECRET` from your `.env`.
+
+**You could remove Vercel** if you replaced it with another backend that does the same job (e.g. AWS Lambda, Cloudflare Worker, a small Node server). The app only cares about the `tokenUrl` in `config.json`, not where that server runs.
+
+---
+
 ## What you need to provide
 
 | Item | Where to get it |
 |------|-----------------|
 | **APS Client ID + Secret** | [APS developer portal](https://aps.autodesk.com/) → Create app |
 | **Model URN** (one model) | Upload + translate in APS, or use an existing viewable URN |
-| **Vercel project** (free) | Hosts `/api/token` only — secrets stay off GitHub Pages |
+| **Token server** (for live deploy) | Vercel project, or reuse `https://prototype-environment.vercel.app/api/token` |
 
 ---
 
@@ -49,7 +110,7 @@ Open http://localhost:5173
 
 ## Publish to GitHub Pages
 
-### 1. Vercel (token API)
+### 1. Token API
 
 Reuse the token endpoint from the main prototype, or deploy your own:
 
