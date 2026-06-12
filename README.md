@@ -17,7 +17,7 @@ Extension logic is copied from [viewer-environment](https://github.com/madhumadh
 2. **The APS Viewer library** is pulled from Autodesk’s CDN (`viewer3D.min.js`).
 3. **The app reads `public/config.json`** to get the model URN and token URL.
 4. **Before the model loads**, the viewer asks for an access token by calling the token URL (currently Vercel).
-5. **With that token**, the viewer opens the model from APS and the custom extension applies the CAD/BIM neutral backdrop and grid.
+5. **With that token**, the viewer opens the model from APS and the custom extension applies the CAD/BIM neutral backdrop and grid.This is hidden in the clean branch.
 
 Nothing secret lives in the GitHub Pages files. The model URN is public; the APS client secret stays on the token server.
 
