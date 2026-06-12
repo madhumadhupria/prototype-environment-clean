@@ -12,7 +12,6 @@ Extension logic is copied from [viewer-environment](https://github.com/madhumadh
 
 ## How it works
 
-At a high level, the app is a single web page that loads a 3D model in the Autodesk Viewer.
 
 1. **The browser loads the page** from GitHub Pages (`index.html` + bundled JavaScript).
 2. **The APS Viewer library** is pulled from Autodesk’s CDN (`viewer3D.min.js`).
