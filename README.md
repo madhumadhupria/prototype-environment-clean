@@ -1,8 +1,10 @@
-# prototype-environment
+# Prototype Environment Clean
 
-Public **single-model** prototype: APS Viewer (LMV) with **CAD/BIM neutral** backdrop and **footprint grid**. Full-screen canvas only — no ACC shell.
+Full-screen APS Viewer (LMV) with **CAD/BIM neutral** backdrop and **footprint grid** — no bottom prototype control bar.
 
-**Live demo (after setup):** https://madhumadhupria.github.io/prototype-environment/
+**Live demo:** https://madhumadhupria.github.io/prototype-environment-clean/
+
+This is a stripped-down fork of [prototype-environment](https://github.com/madhumadhupria/prototype-environment) with the Environment / Section / Rotate bottom strip removed. The CAD/BIM neutral environment is applied automatically.
 
 Extension logic is copied from [viewer-environment](https://github.com/madhumadhupria/viewer-environment) (`main`).
 
@@ -21,8 +23,8 @@ Extension logic is copied from [viewer-environment](https://github.com/madhumadh
 ## Quick start (local)
 
 ```bash
-git clone https://github.com/madhumadhupria/prototype-environment.git
-cd prototype-environment
+git clone https://github.com/madhumadhupria/prototype-environment-clean.git
+cd prototype-environment-clean
 cp .env.example .env
 # Edit .env: APS_CLIENT_ID, APS_CLIENT_SECRET, MODEL_URN
 npm install
@@ -49,10 +51,9 @@ Open http://localhost:5173
 
 ### 1. Vercel (token API)
 
-1. Import this repo in [Vercel](https://vercel.com).
-2. Set environment variables: `APS_CLIENT_ID`, `APS_CLIENT_SECRET`.
-3. Deploy. Note the URL, e.g. `https://prototype-environment.vercel.app`.
-4. Token endpoint: `https://prototype-environment.vercel.app/api/token`
+Reuse the token endpoint from the main prototype, or deploy your own:
+
+`https://prototype-environment.vercel.app/api/token`
 
 ### 2. GitHub repo variables
 
@@ -69,29 +70,6 @@ In **Settings → Secrets and variables → Actions → Variables**:
 **Settings → Pages → Build and deployment → Source:** GitHub Actions.
 
 Push to `main` — workflow deploys `dist/` to Pages.
-
----
-
-## Model URN format
-
-Set `MODEL_URN` in `.env` (local) or GitHub Actions variable (deploy). Base64 id only, **no** `urn:` prefix:
-
-```env
-MODEL_URN=dXJuOmFkc2sud2lwc3RnOmZzLmZpbGU6dmYue...
-```
-
-The app loads `urn:${modelUrn}` from `public/config.json`.
-
----
-
-## Layout
-
-```
-extension/          # CAD/BIM neutral + grid (from viewer-environment)
-src/main.ts         # Full-screen LMV, auto-applies environment
-api/token.js        # Vercel serverless APS token
-scripts/            # Local dev token server
-```
 
 ---
 

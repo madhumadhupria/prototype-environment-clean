@@ -1,5 +1,5 @@
 {
-  "modelUrn": "dXJuOmFkc2sub2JqZWN0czpvcy5vYmplY3Q6cmN2cGZzcndoczhsdWNhcmlzY3lxeGV5dzNsbXBya3hndHl5cGhudHVtc2V2cjQzLWJhc2ljLWFwcC9VcmJhbiUyMEhvdXNlLnJ2dA",
-  "tokenUrl": "https://prototype-environment.vercel.app/api/token",
+  "modelUrn": "",
+  "tokenUrl": "/api/token",
   "apsEnv": "AutodeskProduction"
 }

@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
 	const base =
 		mode === 'development'
 			? '/'
-			: (env.VITE_BASE_PATH ?? '/prototype-environment/');
+			: (env.VITE_BASE_PATH ?? '/prototype-environment-clean/');
 
 	return {
 		base,

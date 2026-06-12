@@ -32,7 +32,7 @@ jobs:
           MODEL_URN: ${{ vars.MODEL_URN }}
           TOKEN_URL: ${{ vars.TOKEN_URL }}
           APS_ENV: ${{ vars.APS_ENV }}
-          VITE_BASE_PATH: /prototype-environment/
+          VITE_BASE_PATH: /prototype-environment-clean/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

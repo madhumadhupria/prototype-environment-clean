@@ -4,11 +4,10 @@ import {
 	BuildingColorSchemeId,
 	DEFAULT_BUILDING_COLOR_SCHEME_ID,
 } from './viewerBuildingPalettes';
-import { PrototypeStripUi, PROTOTYPE_STRIP_ROOT_ID } from './prototypeStripUi';
 import type { SectionPrototypeId } from './prototypeStripSpec';
 import { wireNativeSectionToolbar } from './lmvNativeSection';
-import { deactivateSectionBox, activateSectionBox, isSectionBoxActive, toggleSectionBox } from './viewerEnvironmentSection';
-import { deactivateRotateGizmo, isRotateGizmoActive, toggleRotateGizmo } from './viewerEnvironmentRotate';
+import { deactivateSectionBox, isSectionBoxActive, toggleSectionBox } from './viewerEnvironmentSection';
+import { deactivateRotateGizmo } from './viewerEnvironmentRotate';
 import { ensureStylesInjected } from './styles';
 import { isViewerModelReady } from './viewerEnvironmentLifecycle';
 import { applyCadBimHomeView, captureCadBimHomeViewArray } from './viewerEnvironmentCamera';
@@ -29,9 +28,7 @@ const DEFAULT_COLOR_SCHEME_ID: BuildingColorSchemeId = 'none';
 type ActiveColorSchemeId = Exclude<BuildingColorSchemeId, 'none'>;
 
 class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
-	private prototypeStrip: PrototypeStripUi | undefined;
 	private sectionBoxActive = false;
-	private rotateGizmoActive = false;
 	private currentEnvironmentId: ViewerEnvironmentId = DEFAULT_VIEWER_ENVIRONMENT_ID;
 	private currentColorSchemeId: BuildingColorSchemeId = DEFAULT_COLOR_SCHEME_ID;
 	private objectColorsEnabled = false;
@@ -54,7 +51,6 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 				console.error('ViewerEnvironment: backdrop apply failed', error);
 			}
 		}
-		this.buildPrototypeStrip();
 
 		this.geometryLoadedHandler = (): void => this.scheduleVisualsRefresh();
 		this.viewer.addEventListener(Autodesk.Viewing.GEOMETRY_LOADED_EVENT, this.geometryLoadedHandler);
@@ -113,8 +109,6 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 		void deactivateSectionBox(this.viewer);
 		deactivateRotateGizmo(this.viewer);
 		this.sectionBoxActive = false;
-		this.rotateGizmoActive = false;
-		this.removePrototypeStrip();
 		clearBuildingColorScheme(this.viewer);
 		clearLowDetailContentVisibility(this.viewer);
 		applyViewerEnvironment(this.viewer, 'acc-default');
@@ -190,122 +184,9 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 		}
 	}
 
-	private buildPrototypeStrip(): void {
-		if (this.prototypeStrip) return;
-
-		const host =
-			document.getElementById(PROTOTYPE_STRIP_ROOT_ID) ?? this.viewer.container;
-
-		this.prototypeStrip = new PrototypeStripUi(
-			host,
-			{
-				environmentId: this.currentEnvironmentId,
-				sectionPrototypeId: this.selectedSectionPrototypeId,
-				renderingDetailLevel: this.selectedRenderingDetailLevel,
-				sectionActive: this.sectionBoxActive,
-				rotateActive: this.rotateGizmoActive,
-			},
-			{
-				onEnvironmentSelect: (environmentId): void => {
-					this.setEnvironment(environmentId);
-					this.syncPrototypeStripState();
-				},
-				onSectionSelect: (sectionId): void => {
-					void this.onSectionPrototypeSelect(sectionId);
-				},
-				onSectionClear: (): void => {
-					void this.onSectionClearAll();
-				},
-				onRenderingDetailSelect: (level): void => {
-					this.selectedRenderingDetailLevel = level;
-					this.applyRenderingDetails();
-					this.syncPrototypeStripState();
-				},
-				onRotateToggle: (): void => {
-					void this.onRotateToggle();
-				},
-			}
-		);
-	}
-
-	private removePrototypeStrip(): void {
-		this.prototypeStrip?.destroy();
-		this.prototypeStrip = undefined;
-		const root = document.getElementById(PROTOTYPE_STRIP_ROOT_ID);
-		root?.replaceChildren();
-	}
-
-	private syncPrototypeStripState(): void {
-		this.prototypeStrip?.updateState({
-			environmentId: this.currentEnvironmentId,
-			sectionPrototypeId: this.selectedSectionPrototypeId,
-			renderingDetailLevel: this.selectedRenderingDetailLevel,
-			sectionActive: this.sectionBoxActive,
-			rotateActive: this.rotateGizmoActive,
-		});
-	}
-
-	private async onRotateToggle(): Promise<void> {
-		try {
-			const enabling = !isRotateGizmoActive(this.viewer);
-			if (enabling && this.sectionBoxActive) {
-				await this.onSectionClearAll();
-			}
-
-			const enabled = toggleRotateGizmo(this.viewer, enabling);
-			this.rotateGizmoActive = enabled;
-			this.syncPrototypeStripState();
-		} catch (error) {
-			console.error('ViewerEnvironment: rotate gizmo toggle failed', error);
-		}
-	}
-
-	private async onSectionPrototypeSelect(sectionId: SectionPrototypeId): Promise<void> {
-		if (this.rotateGizmoActive) {
-			deactivateRotateGizmo(this.viewer);
-			this.rotateGizmoActive = false;
-		}
-		const switchingTool =
-			this.sectionBoxActive &&
-			this.selectedSectionPrototypeId !== null &&
-			this.selectedSectionPrototypeId !== sectionId;
-
-		this.selectedSectionPrototypeId = sectionId;
-
-		if (switchingTool) {
-			await deactivateSectionBox(this.viewer);
-			this.sectionBoxActive = false;
-		}
-
-		if (!this.sectionBoxActive) {
-			const enabled = await activateSectionBox(this.viewer, sectionId);
-			this.sectionBoxActive = enabled;
-		}
-
-		this.syncPrototypeStripState();
-		this.syncNativeSectionToolbarState();
-	}
-
-	private async onSectionClearAll(): Promise<void> {
-		if (!this.sectionBoxActive) return;
-
-		try {
-			await deactivateSectionBox(this.viewer);
-			this.sectionBoxActive = false;
-			this.selectedSectionPrototypeId = null;
-			this.syncPrototypeStripState();
-			this.syncNativeSectionToolbarState();
-		} catch (error) {
-			console.error('ViewerEnvironment: section clear failed', error);
-		}
-	}
-
 	private async onSectionBoxToggle(): Promise<void> {
 		try {
-			if (this.rotateGizmoActive) {
-				deactivateRotateGizmo(this.viewer);
-				this.rotateGizmoActive = false;
-			}
+			deactivateRotateGizmo(this.viewer);
 			const mode = this.selectedSectionPrototypeId ?? 'green-box';
 			const enabled = await toggleSectionBox(this.viewer, undefined, mode);
 			this.sectionBoxActive = enabled;
@@ -316,7 +197,6 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 			} else {
 				this.selectedSectionPrototypeId = null;
 			}
-			this.syncPrototypeStripState();
 			this.syncNativeSectionToolbarState();
 		} catch (error) {
 			console.error('ViewerEnvironment: section box toggle failed', error);
@@ -356,29 +236,6 @@ class ViewerEnvironmentExtension extends Autodesk.Viewing.Extension {
 			}
 		} catch (error) {
 			console.error('ViewerEnvironment: color scheme apply failed', error);
-		}
-	}
-
-	private setEnvironment(environmentId: ViewerEnvironmentId): void {
-		const unchanged = environmentId === this.currentEnvironmentId;
-		this.currentEnvironmentId = environmentId;
-		if (unchanged) {
-			if (environmentId === 'cad-bim-neutral') {
-				try {
-					applyCadBimVisuals(this.viewer);
-				} catch (error) {
-					console.error('ViewerEnvironment: refresh visuals failed', error);
-				}
-			}
-			return;
-		}
-		try {
-			applyViewerEnvironment(this.viewer, environmentId);
-			if (environmentId === 'cad-bim-neutral') {
-				applyCadBimHomeView(this.viewer, { once: true, skipTransition: true });
-			}
-		} catch (error) {
-			console.error('ViewerEnvironment: applyViewerEnvironment failed', error);
 		}
 	}
 }
